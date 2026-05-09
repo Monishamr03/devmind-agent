@@ -7,5 +7,12 @@
       "added": "2026-05-09"
     }
   ],
-  "jobs": []
+  "jobs": [
+    {
+      "company": "Google",
+      "role": "SWE intern",
+      "status": "applied",
+      "date": "2026-05-09"
+    }
+  ]
 }
