@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>DevMind Agent</title>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+<style>
+*{margin:0;padding:0;box-sizing:border-box;}
+:root{
+  --bg:#080b14;
+  --surface:rgba(255,255,255,0.03);
+  --border:rgba(255,255,255,0.08);
+  --purple:#6366f1;
+  --purple-light:#a78bfa;
+  --pink:#ec4899;
+  --green:#10b981;
+  --amber:#f59e0b;
+  --text:#e2e8f0;
+  --muted:#64748b;
+}
+body{font-family:'Inter',sans-serif;background:var(--bg);color:var(--text);height:100vh;display:flex;overflow:hidden;}
+
+/* Animated background */
+body::before{
+  content:'';position:fixed;top:-50%;left:-50%;width:200%;height:200%;
+  background:radial-gradient(ellipse at 20% 20%,rgba(99,102,241,0.08) 0%,transparent 50%),
+             radial-gradient(ellipse at 80% 80%,rgba(236,72,153,0.06) 0%,transparent 50%),
+             radial-gradient(ellipse at 50% 50%,rgba(16,185,129,0.04) 0%,transparent 60%);
+  pointer-events:none;z-index:0;
+}
+
+/* SIDEBAR */
+.sidebar{
+  width:280px;min-width:280px;
+  background:rgba(8,11,20,0.9);
+  border-right:1px solid var(--border);
+  display:flex;flex-direction:column;
+  backdrop-filter:blur(20px);
+  position:relative;z-index:1;
+  overflow-y:auto;
+}
+.sidebar-logo{
+  padding:24px 20px 20px;
+  border-bottom:1px solid var(--border);
+}
+.logo-badge{
+  display:flex;align-items:center;gap:10px;
+}
+.logo-icon{
+  width:40px;height:40px;
+  background:linear-gradient(135deg,#6366f1,#8b5cf6);
+  border-radius:12px;
+  display:flex;align-items:center;justify-content:center;
+  font-size:20px;flex-shrink:0;
+}
+.logo-text{font-size:16px;font-weight:700;color:#f1f5f9;}
+.logo-sub{font-size:11px;color:var(--muted);margin-top:1px;}
+
+.sidebar-section{padding:16px 20px;}
+.section-label{
+  font-size:10px;font-weight:700;letter-spacing:1.5px;
+  color:var(--muted);text-transform:uppercase;margin-bottom:10px;
+}
+
+.stats-row{display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:20px;}
+.stat-card{
+  background:rgba(99,102,241,0.08);
+  border:1px solid rgba(99,102,241,0.15);
+  border-radius:10px;padding:12px;text-align:center;
+}
+.stat-num{font-size:1.6rem;font-weight:700;color:var(--purple-light);}
+.stat-label{font-size:11px;color:var(--muted);margin-top:2px;}
+
+.item-card{
+  border-radius:8px;padding:10px 12px;margin:4px 0;font-size:12px;
+  border:1px solid;line-height:1.4;
+}
+.item-card.purple{background:rgba(99,102,241,0.1);border-color:rgba(99,102,241,0.2);color:#c7d2fe;}
+.item-card.pink{background:rgba(236,72,153,0.1);border-color:rgba(236,72,153,0.2);color:#f9a8d4;}
+.item-card.empty{background:transparent;border-color:transparent;color:var(--muted);font-style:italic;}
+
+.cmd-item{
+  font-family:monospace;font-size:11px;color:var(--muted);
+  background:rgba(255,255,255,0.03);border:1px solid var(--border);
+  border-radius:6px;padding:6px 10px;margin:3px 0;
+  cursor:pointer;transition:all 0.2s;
+}
+.cmd-item:hover{background:rgba(99,102,241,0.1);border-color:rgba(99,102,241,0.3);color:#c7d2fe;}
+
+.refresh-btn{
+  margin:12px 20px;
+  background:linear-gradient(135deg,#6366f1,#8b5cf6);
+  color:white;border:none;border-radius:10px;
+  padding:10px;font-size:13px;font-weight:600;
+  cursor:pointer;transition:all 0.2s;width:calc(100% - 40px);
+}
+.refresh-btn:hover{transform:translateY(-1px);box-shadow:0 4px 20px rgba(99,102,241,0.4);}
+
+/* MAIN */
+.main{flex:1;display:flex;flex-direction:column;position:relative;z-index:1;overflow:hidden;}
+
+.header{
+  padding:32px 40px 20px;text-align:center;
+  border-bottom:1px solid var(--border);
+  background:rgba(8,11,20,0.5);backdrop-filter:blur(10px);
+}
+.live-badge{
+  display:inline-flex;align-items:center;gap:6px;
+  background:rgba(16,185,129,0.1);border:1px solid rgba(16,185,129,0.2);
+  border-radius:20px;padding:4px 14px;margin-bottom:14px;
+}
+.live-dot{width:7px;height:7px;background:#10b981;border-radius:50%;animation:pulse 2s infinite;}
+.live-text{font-size:11px;font-weight:600;color:#6ee7b7;letter-spacing:1px;}
+@keyframes pulse{0%,100%{opacity:1;transform:scale(1);}50%{opacity:0.6;transform:scale(0.9);}}
+
+.header h1{
+  font-size:2.2rem;font-weight:800;letter-spacing:-0.5px;
+  background:linear-gradient(135deg,#e0e7ff 0%,#a78bfa 50%,#6366f1 100%);
+  -webkit-background-clip:text;-webkit-text-fill-color:transparent;
+  margin-bottom:6px;
+}
+.header p{color:var(--muted);font-size:13px;}
+
+/* CHAT */
+.chat-area{
+  flex:1;overflow-y:auto;padding:24px 40px;
+  scrollbar-width:thin;scrollbar-color:#6366f1 transparent;
+}
+.chat-area::-webkit-scrollbar{width:4px;}
+.chat-area::-webkit-scrollbar-thumb{background:#6366f1;border-radius:4px;}
+
+/* Intro cards */
+.intro-grid{display:grid;grid-template-columns:1fr 1fr;gap:12px;max-width:600px;margin:8px auto;}
+.intro-card{
+  border-radius:12px;padding:16px;border:1px solid;
+  transition:transform 0.2s;cursor:default;
+}
+.intro-card:hover{transform:translateY(-2px);}
+.intro-card.purple{background:rgba(99,102,241,0.08);border-color:rgba(99,102,241,0.2);}
+.intro-card.pink{background:rgba(236,72,153,0.08);border-color:rgba(236,72,153,0.2);}
+.intro-card.amber{background:rgba(245,158,11,0.08);border-color:rgba(245,158,11,0.2);}
+.intro-card.green{background:rgba(16,185,129,0.08);border-color:rgba(16,185,129,0.2);}
+.intro-icon{font-size:22px;margin-bottom:6px;}
+.intro-title{font-size:13px;font-weight:600;margin-bottom:2px;}
+.intro-card.purple .intro-title{color:#c7d2fe;}
+.intro-card.pink .intro-title{color:#f9a8d4;}
+.intro-card.amber .intro-title{color:#fde68a;}
+.intro-card.green .intro-title{color:#6ee7b7;}
+.intro-desc{font-size:11px;color:var(--muted);}
+
+/* Messages */
+.message{display:flex;gap:12px;margin:16px 0;animation:fadeIn 0.3s ease;}
+@keyframes fadeIn{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:translateY(0);}}
+.message.user{flex-direction:row-reverse;}
+
+.avatar{
+  width:34px;height:34px;border-radius:10px;flex-shrink:0;
+  display:flex;align-items:center;justify-content:center;font-size:16px;
+}
+.avatar.agent{background:linear-gradient(135deg,#6366f1,#8b5cf6);}
+.avatar.user{background:linear-gradient(135deg,#ec4899,#f43f5e);}
+
+.bubble{
+  max-width:75%;background:var(--surface);
+  border:1px solid var(--border);border-radius:16px;
+  padding:14px 18px;font-size:14px;line-height:1.7;
+}
+.message.user .bubble{
+  background:rgba(99,102,241,0.12);
+  border-color:rgba(99,102,241,0.25);
+  color:#e0e7ff;
+}
+
+/* Reasoning cards */
+.reasoning-card{
+  border-radius:12px;padding:14px 18px;margin:8px 0;
+  border:1px solid;font-size:13px;line-height:1.7;
+}
+.reasoning-label{
+  font-size:10px;font-weight:700;letter-spacing:1.5px;
+  text-transform:uppercase;margin-bottom:8px;
+}
+.reasoning-card.understanding{background:rgba(99,102,241,0.08);border-color:rgba(99,102,241,0.25);}
+.reasoning-card.understanding .reasoning-label{color:#6366f1;}
+.reasoning-card.plan{background:rgba(245,158,11,0.08);border-color:rgba(245,158,11,0.25);}
+.reasoning-card.plan .reasoning-label{color:#f59e0b;}
+.reasoning-card.answer{background:rgba(16,185,129,0.08);border-color:rgba(16,185,129,0.25);}
+.reasoning-card.answer .reasoning-label{color:#10b981;}
+.reasoning-card.nextsteps{background:rgba(236,72,153,0.08);border-color:rgba(236,72,153,0.25);}
+.reasoning-card.nextsteps .reasoning-label{color:#ec4899;}
+.reasoning-body{color:#cbd5e1;white-space:pre-wrap;}
+
+/* Saved badge */
+.saved-badge{
+  display:inline-flex;align-items:center;gap:8px;
+  background:rgba(16,185,129,0.12);border:1px solid rgba(16,185,129,0.25);
+  border-radius:10px;padding:12px 16px;font-size:14px;color:#6ee7b7;font-weight:500;
+}
+
+/* Typing indicator */
+.typing{display:flex;gap:4px;align-items:center;padding:4px 0;}
+.typing span{width:6px;height:6px;background:#6366f1;border-radius:50%;animation:bounce 1.2s infinite;}
+.typing span:nth-child(2){animation-delay:0.2s;}
+.typing span:nth-child(3){animation-delay:0.4s;}
+@keyframes bounce{0%,60%,100%{transform:translateY(0);}30%{transform:translateY(-6px);}}
+
+/* INPUT */
+.input-area{
+  padding:16px 40px 24px;
+  border-top:1px solid var(--border);
+  background:rgba(8,11,20,0.7);backdrop-filter:blur(10px);
+}
+.input-row{
+  display:flex;gap:10px;align-items:flex-end;
+  background:rgba(255,255,255,0.04);
+  border:1px solid rgba(99,102,241,0.3);
+  border-radius:16px;padding:10px 14px;
+  transition:border-color 0.2s;
+}
+.input-row:focus-within{border-color:rgba(99,102,241,0.6);box-shadow:0 0 0 3px rgba(99,102,241,0.1);}
+#msgInput{
+  flex:1;background:transparent;border:none;outline:none;
+  color:#e2e8f0;font-size:14px;font-family:'Inter',sans-serif;
+  resize:none;max-height:120px;line-height:1.5;
+}
+#msgInput::placeholder{color:var(--muted);}
+.send-btn{
+  width:36px;height:36px;background:linear-gradient(135deg,#6366f1,#8b5cf6);
+  border:none;border-radius:10px;cursor:pointer;
+  display:flex;align-items:center;justify-content:center;
+  flex-shrink:0;transition:all 0.2s;
+}
+.send-btn:hover{transform:scale(1.05);box-shadow:0 4px 12px rgba(99,102,241,0.4);}
+.send-btn svg{width:16px;height:16px;fill:white;}
+</style>
+</head>
+<body>
+
+<!-- SIDEBAR -->
+<div class="sidebar">
+  <div class="sidebar-logo">
+    <div class="logo-badge">
+      <div class="logo-icon">🧠</div>
+      <div>
+        <div class="logo-text">DevMind</div>
+        <div class="logo-sub">Command Center</div>
+      </div>
+    </div>
+  </div>
+
+  <div class="sidebar-section">
+    <div class="stats-row">
+      <div class="stat-card">
+        <div class="stat-num" id="taskCount">0</div>
+        <div class="stat-label">📚 Tasks</div>
+      </div>
+      <div class="stat-card">
+        <div class="stat-num" id="jobCount">0</div>
+        <div class="stat-label">💼 Jobs</div>
+      </div>
+    </div>
+
+    <div class="section-label">Assignments</div>
+    <div id="assignmentList"></div>
+
+    <div class="section-label" style="margin-top:16px;">Job Applications</div>
+    <div id="jobList"></div>
+
+    <div class="section-label" style="margin-top:16px;">Quick Commands</div>
+    <div class="cmd-item" onclick="sendCommand('add assignment X due Y')">add assignment X due Y</div>
+    <div class="cmd-item" onclick="sendCommand('show assignments')">show assignments</div>
+    <div class="cmd-item" onclick="sendCommand('add job Google SWE applied')">add job Google SWE applied</div>
+    <div class="cmd-item" onclick="sendCommand('show jobs')">show jobs</div>
+    <div class="cmd-item" onclick="sendCommand('help me plan my week')">help me plan my week</div>
+    <div class="cmd-item" onclick="sendCommand('prepare for technical interview')">prepare for interview</div>
+  </div>
+
+  <button class="refresh-btn" onclick="loadData()">⟳ Refresh</button>
+</div>
+
+<!-- MAIN -->
+<div class="main">
+  <div class="header">
+    <div class="live-badge">
+      <div class="live-dot"></div>
+      <span class="live-text">POWERED BY GEMINI 2.5 + ARIZE</span>
+    </div>
+    <h1>DevMind Agent</h1>
+    <p>AI assistant for student developers · White-box reasoning · Real-time observability</p>
+  </div>
+
+  <div class="chat-area" id="chatArea">
+    <div class="message">
+      <div class="avatar agent">🧠</div>
+      <div class="bubble">
+        <p style="margin-bottom:14px;">👋 Hey! I'm <strong style="color:#a78bfa;">DevMind Agent</strong> — your AI-powered student developer companion.</p>
+        <div class="intro-grid">
+          <div class="intro-card purple">
+            <div class="intro-icon">📚</div>
+            <div class="intro-title">Track Assignments</div>
+            <div class="intro-desc">Never miss a deadline</div>
+          </div>
+          <div class="intro-card pink">
+            <div class="intro-icon">💼</div>
+            <div class="intro-title">Job Applications</div>
+            <div class="intro-desc">Track your career journey</div>
+          </div>
+          <div class="intro-card amber">
+            <div class="intro-icon">🧑‍💻</div>
+            <div class="intro-title">Interview Prep</div>
+            <div class="intro-desc">DSA, system design & more</div>
+          </div>
+          <div class="intro-card green">
+            <div class="intro-icon">🔍</div>
+            <div class="intro-title">White Box AI</div>
+            <div class="intro-desc">See every reasoning step</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div class="input-area">
+    <div class="input-row">
+      <textarea id="msgInput" rows="1" placeholder="Ask me anything — assignments, jobs, coding, career..."></textarea>
+      <button class="send-btn" onclick="sendMessage()">
+        <svg viewBox="0 0 24 24"><path d="M2 21l21-9L2 3v7l15 2-15 2v7z"/></svg>
+      </button>
+    </div>
+  </div>
+</div>
+
+<script>
+const chatArea = document.getElementById('chatArea');
+const msgInput = document.getElementById('msgInput');
+
+msgInput.addEventListener('keydown', e => {
+  if(e.key === 'Enter' && !e.shiftKey){ e.preventDefault(); sendMessage(); }
+});
+
+msgInput.addEventListener('input', () => {
+  msgInput.style.height = 'auto';
+  msgInput.style.height = Math.min(msgInput.scrollHeight, 120) + 'px';
+});
+
+function sendCommand(cmd){ msgInput.value = cmd; sendMessage(); }
+
+function addMessage(role, content){
+  const div = document.createElement('div');
+  div.className = `message ${role}`;
+  const avatar = document.createElement('div');
+  avatar.className = `avatar ${role}`;
+  avatar.textContent = role === 'agent' ? '🧠' : '👤';
+  const bubble = document.createElement('div');
+  bubble.className = 'bubble';
+  bubble.innerHTML = content;
+  div.appendChild(avatar);
+  div.appendChild(bubble);
+  chatArea.appendChild(div);
+  chatArea.scrollTop = chatArea.scrollHeight;
+  return bubble;
+}
+
+function showTyping(){
+  const div = document.createElement('div');
+  div.className = 'message';
+  div.id = 'typing';
+  div.innerHTML = `<div class="avatar agent">🧠</div><div class="bubble"><div class="typing"><span></span><span></span><span></span></div></div>`;
+  chatArea.appendChild(div);
+  chatArea.scrollTop = chatArea.scrollHeight;
+}
+
+function removeTyping(){ const t = document.getElementById('typing'); if(t) t.remove(); }
+
+function parseReasoning(text){
+  const sections = [
+    { key: '🧠 UNDERSTANDING', cls: 'understanding', label: '🧠 Understanding' },
+    { key: '📋 MY PLAN', cls: 'plan', label: '📋 My Plan' },
+    { key: '✅ ANSWER', cls: 'answer', label: '✅ Answer' },
+    { key: '💡 NEXT STEPS', cls: 'nextsteps', label: '💡 Next Steps' },
+  ];
+  const data = {};
+  let current = null, lines = [];
+  for(const line of text.split('\n')){
+    let matched = false;
+    for(const s of sections){
+      if(line.startsWith(s.key)){
+        if(current) data[current] = lines.join('\n').trim();
+        current = s.key;
+        lines = [line.replace(s.key + ':', '').trim()];
+        matched = true; break;
+      }
+    }
+    if(!matched && current) lines.push(line);
+  }
+  if(current) data[current] = lines.join('\n').trim();
+
+  let html = '';
+  for(const s of sections){
+    if(data[s.key]){
+      html += `<div class="reasoning-card ${s.cls}">
+        <div class="reasoning-label">${s.label}</div>
+        <div class="reasoning-body">${data[s.key]}</div>
+      </div>`;
+    }
+  }
+  return html || `<p>${text}</p>`;
+}
+
+async function sendMessage(){
+  const text = msgInput.value.trim();
+  if(!text) return;
+  msgInput.value = '';
+  msgInput.style.height = 'auto';
+
+  addMessage('user', `<p>${text}</p>`);
+  showTyping();
+
+  try {
+    const res = await fetch('/api/chat', {
+      method:'POST',
+      headers:{'Content-Type':'application/json'},
+      body: JSON.stringify({message: text})
+    });
+    const data = await res.json();
+    removeTyping();
+
+    if(data.type === 'reasoning'){
+      const bubble = addMessage('agent', parseReasoning(data.content));
+    } else if(data.type === 'saved'){
+      addMessage('agent', `<div class="saved-badge">✅ ${data.content}</div>`);
+      loadData();
+    } else if(data.type === 'data'){
+      if(data.category === 'assignments'){
+        let html = '<p style="color:#a78bfa;font-weight:600;margin-bottom:10px;">📚 Your Assignments</p>';
+        if(!data.content.length) html += '<p style="color:#64748b;">No assignments yet.</p>';
+        else data.content.forEach((a,i) => {
+          html += `<div class="reasoning-card understanding" style="margin:6px 0;">
+            <strong>${i+1}. ${a.name}</strong> <span style="color:#64748b;">due ${a.due}</span>
+            <span style="background:rgba(99,102,241,0.2);color:#a78bfa;border-radius:4px;padding:1px 6px;font-size:11px;margin-left:6px;">${a.status}</span>
+          </div>`;
+        });
+        addMessage('agent', html);
+      } else {
+        let html = '<p style="color:#f9a8d4;font-weight:600;margin-bottom:10px;">💼 Your Job Applications</p>';
+        if(!data.content.length) html += '<p style="color:#64748b;">No applications yet.</p>';
+        else data.content.forEach((j,i) => {
+          html += `<div class="reasoning-card nextsteps" style="margin:6px 0;">
+            <strong>${i+1}. ${j.role}</strong> <span style="color:#64748b;">@ ${j.company}</span>
+            <span style="background:rgba(236,72,153,0.2);color:#f9a8d4;border-radius:4px;padding:1px 6px;font-size:11px;margin-left:6px;">${j.status}</span>
+          </div>`;
+        });
+        addMessage('agent', html);
+      }
+    }
+  } catch(e) {
+    removeTyping();
+    addMessage('agent', '<p style="color:#f87171;">Something went wrong. Please try again.</p>');
+  }
+}
+
+async function loadData(){
+  try {
+    const res = await fetch('/api/data');
+    const data = await res.json();
+    document.getElementById('taskCount').textContent = data.assignments.length;
+    document.getElementById('jobCount').textContent = data.jobs.length;
+    const al = document.getElementById('assignmentList');
+    const jl = document.getElementById('jobList');
+    al.innerHTML = data.assignments.length ? data.assignments.map(a =>
+      `<div class="item-card purple">${a.name} — <span style="opacity:0.7">due ${a.due}</span></div>`).join('') :
+      '<div class="item-card empty">No assignments yet</div>';
+    jl.innerHTML = data.jobs.length ? data.jobs.map(j =>
+      `<div class="item-card pink">${j.role} @ ${j.company}</div>`).join('') :
+      '<div class="item-card empty">No applications yet</div>';
+  } catch(e){}
+}
+
+loadData();
+</script>
+</body>
+</html>
