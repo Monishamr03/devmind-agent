@@ -2,7 +2,18 @@ from google import genai
 import os
 import json
 from datetime import datetime
+from opentelemetry import trace
+from arize.otel import register
 
+# Setup Arize tracing
+tracer_provider = register(
+    space_id=os.environ.get("ARIZE_SPACE_KEY"),
+    api_key=os.environ.get("ARIZE_API_KEY"),
+    project_name="devmind-agent",
+)
+tracer = trace.get_tracer(__name__)
+
+# Setup Gemini
 api_key = os.environ.get("GEMINI_API_KEY")
 client = genai.Client(api_key=api_key)
 history = []
@@ -49,51 +60,71 @@ def show_jobs():
     return result
 
 def devmind_agent(user_input):
-    user_lower = user_input.lower()
+    with tracer.start_as_current_span("devmind-agent-response") as span:
+        span.set_attribute("user.input", user_input)
+        span.set_attribute("agent.name", "DevMind Agent")
 
-    if "show" in user_lower and "assignment" in user_lower:
-        return show_assignments()
+        user_lower = user_input.lower()
 
-    if "show" in user_lower and ("job" in user_lower or "application" in user_lower):
-        return show_jobs()
+        if "show" in user_lower and "assignment" in user_lower:
+            result = show_assignments()
+            span.set_attribute("action.taken", "show_assignments")
+            span.set_attribute("agent.response", result)
+            return result
 
-    if "add assignment" in user_lower or "save assignment" in user_lower:
-        history.append(f"User: {user_input}")
-        prompt = f"""Extract assignment details from: "{user_input}"
+        if "show" in user_lower and ("job" in user_lower or "application" in user_lower):
+            result = show_jobs()
+            span.set_attribute("action.taken", "show_jobs")
+            span.set_attribute("agent.response", result)
+            return result
+
+        if "add assignment" in user_lower or "save assignment" in user_lower:
+            history.append(f"User: {user_input}")
+            prompt = f"""Extract assignment details from: "{user_input}"
 Return ONLY:
 NAME: <assignment name>
 DUE: <due date>
 STATUS: pending"""
-        response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-        lines = response.text.strip().split("\n")
-        name, due = "Unknown", "Unknown"
-        for line in lines:
-            if line.startswith("NAME:"): name = line.replace("NAME:", "").strip()
-            elif line.startswith("DUE:"): due = line.replace("DUE:", "").strip()
-        add_assignment(name, due)
-        return f"Got it! Added '{name}' due {due}.\nType 'show assignments' to see all."
+            response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+            lines = response.text.strip().split("\n")
+            name, due = "Unknown", "Unknown"
+            for line in lines:
+                if line.startswith("NAME:"): name = line.replace("NAME:", "").strip()
+                elif line.startswith("DUE:"): due = line.replace("DUE:", "").strip()
+            add_assignment(name, due)
+            span.set_attribute("action.taken", "add_assignment")
+            span.set_attribute("assignment.name", name)
+            span.set_attribute("assignment.due", due)
+            result = f"Got it! Added '{name}' due {due}.\nType 'show assignments' to see all."
+            span.set_attribute("agent.response", result)
+            return result
 
-    if "add job" in user_lower or "applied" in user_lower or "save job" in user_lower:
-        history.append(f"User: {user_input}")
-        prompt = f"""Extract job application details from: "{user_input}"
+        if "add job" in user_lower or "applied" in user_lower or "save job" in user_lower:
+            history.append(f"User: {user_input}")
+            prompt = f"""Extract job application details from: "{user_input}"
 Return ONLY:
 COMPANY: <company name>
 ROLE: <job title or role>
 STATUS: applied"""
-        response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-        lines = response.text.strip().split("\n")
-        company, role = "Unknown", "Unknown"
-        for line in lines:
-            if line.startswith("COMPANY:"): company = line.replace("COMPANY:", "").strip()
-            elif line.startswith("ROLE:"): role = line.replace("ROLE:", "").strip()
-        add_job(company, role)
-        return f"Got it! Saved application for '{role}' at {company}.\nType 'show jobs' to see all."
+            response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+            lines = response.text.strip().split("\n")
+            company, role = "Unknown", "Unknown"
+            for line in lines:
+                if line.startswith("COMPANY:"): company = line.replace("COMPANY:", "").strip()
+                elif line.startswith("ROLE:"): role = line.replace("ROLE:", "").strip()
+            add_job(company, role)
+            span.set_attribute("action.taken", "add_job")
+            span.set_attribute("job.company", company)
+            span.set_attribute("job.role", role)
+            result = f"Got it! Saved application for '{role}' at {company}.\nType 'show jobs' to see all."
+            span.set_attribute("agent.response", result)
+            return result
 
-    history.append(f"User: {user_input}")
-    context = "\n".join(history[-6:])
-    all_data = f"{show_assignments()}\n{show_jobs()}"
+        history.append(f"User: {user_input}")
+        context = "\n".join(history[-6:])
+        all_data = f"{show_assignments()}\n{show_jobs()}"
 
-    prompt = f"""You are DevMind Agent for student developers.
+        prompt = f"""You are DevMind Agent for student developers.
 Help with assignments, jobs, GitHub, and Google Cloud.
 Always show reasoning step by step.
 
@@ -108,13 +139,21 @@ MY PLAN: step by step plan
 ANSWER: your response
 NEXT STEPS: what to do next"""
 
-    response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
-    reply = response.text
-    history.append(f"Agent: {reply[:150]}")
-    return reply
+        span.set_attribute("action.taken", "ai_response")
+        span.set_attribute("prompt.sent", prompt[:500])
+
+        response = client.models.generate_content(model="gemini-2.5-flash", contents=prompt)
+        reply = response.text
+
+        span.set_attribute("agent.response", reply[:500])
+        span.set_attribute("reasoning.format", "UNDERSTANDING/PLAN/ANSWER/NEXT_STEPS")
+
+        history.append(f"Agent: {reply[:150]}")
+        return reply
 
 print("=" * 50)
 print("Welcome to DevMind Agent! 🚀")
+print("Now with Arize observability!")
 print("Commands:")
 print("  'add assignment X due Y'")
 print("  'show assignments'")
